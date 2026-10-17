@@ -1,0 +1,46 @@
+# Builds the Android APK on YOUR OWN machine, registered as a self-hosted runner for this repository.
+# Your dump, keys and the built APK never leave that machine: this workflow uploads no artifacts, and it only
+# runs when you start it by hand (Actions tab -> "Build Android APK (self-hosted)" -> Run workflow).
+# One-time setup on the machine: bash tools/selfhosted/setup.sh   (see tools/selfhosted/README.md)
+name: Build Android APK (self-hosted)
+
+on:
+  workflow_dispatch:
+    inputs:
+      dump_dir:
+        description: Folder on your machine with prod.keys, title.keys and the Wonder 1.0.0 .xci/.nsp
+        default: ~/wonder
+        required: true
+      jobs:
+        description: Parallel compile jobs ("auto" = RAM in GB / 2)
+        default: auto
+        required: true
+      pack_data:
+        description: Also make Wonder-data.zip (~4 GB) to copy to the phone
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wonder-apk
+  cancel-in-progress: false
+
+jobs:
+  apk:
+    # Only the repository owner may start it, and only on the self-hosted runner.
+    if: github.actor == github.repository_owner
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 2880   # a weak laptop can take many hours; every stage resumes on the next run
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: false        # keep ./private (a link to the persistent build folder)
+
+      - name: Build
+        env:
+          DUMP_DIR: ${{ inputs.dump_dir }}
+          BUILD_JOBS: ${{ inputs.jobs }}
+          PACK_DATA: ${{ inputs.pack_data && '1' || '0' }}
+        run: bash tools/selfhosted/build_android.sh "$DUMP_DIR" "$BUILD_JOBS" "$PACK_DATA"
